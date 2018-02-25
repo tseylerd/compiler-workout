@@ -2,6 +2,7 @@
    The library provides "@type ..." syntax extension and plugins like show, etc.
 *)
 open GT 
+open List
     
 (* Simple expressions: syntax and semantics *)
 module Expr =
@@ -41,7 +42,31 @@ module Expr =
        Takes a state and an expression, and returns the value of the expression in 
        the given state.
     *)
-    let eval _ = failwith "Not implemented yet"
+    let asboolean s = s <> 0
+
+    let asinteger b = if b then 1 else 0
+
+    let rec eval s e = match e with
+      | Const c -> c
+      | Var v -> s v
+      | Binop (o, el, er) ->
+        let lr = eval s el in
+        let rr = eval s er in
+        match o with
+          | "!!" -> asinteger (asboolean lr || asboolean rr)
+          | "&&" -> asinteger (asboolean lr && asboolean rr)
+          | "==" -> asinteger (lr = rr) 
+          | "!=" -> asinteger (lr <> rr) 
+          | "<=" -> asinteger (lr <= rr) 
+          | ">=" -> asinteger (lr >= rr)
+          | "<" -> asinteger (lr < rr)
+          | ">" -> asinteger (lr > rr)
+          | "+" -> lr + rr 
+          | "-" -> lr - rr
+          | "*" -> lr * rr 
+          | "/" -> lr / rr 
+          | "%" -> lr mod rr     
+          | _ -> failwith "unsupported binary operator"
 
   end
                     
@@ -65,6 +90,17 @@ module Stmt =
 
        Takes a configuration and a statement, and returns another configuration
     *)
-    let eval _ = failwith "Not implemented yet"
+    let rec eval (state, inlist, outlist) statement = match statement with
+      | Read x -> 
+        let head = hd inlist in 
+        let tail = tl inlist in 
+        (Expr.update x head state, tail, outlist)
+      | Write x -> 
+        let result = Expr.eval state x in 
+        (state, inlist, outlist @ [result])
+      | Assign (s, e) -> 
+        let result = Expr.eval state e in 
+        (Expr.update s result state, inlist, outlist)
+      | Seq (first, second) -> (eval (eval (state, inlist, outlist) first) second)
                                                          
   end

@@ -1,4 +1,5 @@
-open GT       
+open GT   
+open List    
        
 (* The type for the stack machine instructions *)
 @type insn =
@@ -23,7 +24,21 @@ type config = int list * Syntax.Stmt.config
 
    Takes a configuration and a program, and returns a configuration as a result
  *)                         
-let eval _ = failwith "Not yet implemented"
+let rec eval (stack, state, inlist, outlist) program = 
+  match program with
+    | command::programtail -> 
+      match command with
+        | BINOP s ->
+            let firstOperand = hd stack in
+            let secondOperand = hd (tl stack) in
+            let result = Syntax.Expr.eval state (Syntax.Expr.Binop(s, Syntax.Expr.Const firstOperand, Syntax.Expr.Const secondOperand)) in
+            eval (result :: stack, state, inlist, outlist) programtail 
+        | CONST i -> eval (i :: stack, state, inlist, outlist) programtail
+        | READ -> eval (hd inlist :: stack, state, tl inlist, outlist) programtail
+        | WRITE -> eval (tl stack, state, inlist, outlist @ [hd stack]) programtail
+        | LD s -> eval (state s :: stack, state, inlist, outlist) programtail
+        | ST s -> eval (tl stack, Syntax.Expr.update s (hd stack) state, inlist, outlist) programtail
+    | _ -> (stack, state, inlist, outlist)
 
 (* Stack machine compiler
 
@@ -33,4 +48,15 @@ let eval _ = failwith "Not yet implemented"
    stack machine
  *)
 
-let compile _ = failwith "Not yet implemented"
+let rec flatten expr =
+	match expr with
+	  | Syntax.Expr.Const i -> [CONST i]
+	  | Syntax.Expr.Var s -> [LD s]
+	  | Syntax.Expr.Binop (o, l, r) -> flatten l @ flatten r @ [BINOP o]
+
+let rec compile statement =
+	match statement with
+	  | Syntax.Stmt.Read s -> [READ] @ [ST s]
+	  | Syntax.Stmt.Write e -> flatten e @ [WRITE]
+	  | Syntax.Stmt.Assign (s, e) -> flatten e @ [ST s]
+	  | Syntax.Stmt.Seq (l, r) -> compile l @ compile r
